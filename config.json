@@ -1,0 +1,24 @@
+{
+  "origens": [
+    "GRU",
+    "VCP",
+    "CGH"
+  ],
+  "destino": "LIS",
+  "ida_inicio": "2027-04-28",
+  "ida_fim": "2027-04-30",
+  "volta_inicio": "2027-05-20",
+  "volta_fim": "2027-05-25",
+  "passageiros": 2,
+  "teto_por_pessoa": 4500,
+  "teto_urgente_por_pessoa": 3800,
+  "queda_minima_pct": 10,
+  "margem_novo_minimo": 50,
+  "varreduras_aquecimento": 3,
+  "horas_sem_repetir_alerta": 24,
+  "resumo_diario_hora": 9,
+  "pausa_min_seg": 2,
+  "pausa_max_seg": 5,
+  "serpapi_limite_mensal": 240,
+  "serpapi_horas_entre_varreduras": 20
+}
