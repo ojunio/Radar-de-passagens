@@ -342,12 +342,19 @@ def montar_resumo(hist):
         if k not in melhor_por_combo or r["preco_pessoa"] < melhor_por_combo[k]["preco_pessoa"]:
             melhor_por_combo[k] = r
     top = sorted(melhor_por_combo.values(), key=lambda r: r["preco_pessoa"])[:5]
-    varreduras = len({r["varredura"] for r in ult24})
     minimo_total = min(r["preco_pessoa"] for r in hist)
-    txt = [f"<b>Radar SP → Lisboa · resumo de {agora().strftime('%d/%m')}</b>",
-           f"{varreduras} varreduras nas últimas 24h.",
-           f"Menor preço desde o início do radar: {brl(minimo_total)}/pessoa", "",
-           "Melhores das últimas 24h:"] + [f"• {linha_oferta(r)}" for r in top]
+    n = CFG["passageiros"]
+    txt = [f"<b>Radar de passagens SP → Lisboa · {agora().strftime('%d/%m')}</b>",
+           f"{n} adultos, econômica, ida de {fmt_data(CFG['ida_inicio'])} a {fmt_data(CFG['ida_fim'])}, "
+           f"volta de {fmt_data(CFG['volta_inicio'])} a {fmt_data(CFG['volta_fim'])}. "
+           "Preço por pessoa, ida e volta, sem bagagem despachada.", "",
+           f"Melhor agora: <b>{brl(top[0]['preco_pessoa'])}</b>/pessoa "
+           f"(cerca de {brl(top[0]['preco_pessoa'] * n)} para {n} pessoas)",
+           f"Menor preço visto desde {fmt_data(min(r['data_hora_brt'] for r in hist)[:10])}: "
+           f"{brl(minimo_total)}/pessoa", "",
+           "Melhores combinações nas últimas 24h:"] + [f"• {linha_oferta(r)}" for r in top]
+    link = link_google(top[0]["origem"], top[0]["ida"], top[0]["volta"])
+    txt += ["", f'<a href="{html.escape(link)}">Abrir a melhor no Google Flights</a>']
     return "\n".join(txt)
 
 
@@ -476,36 +483,33 @@ def main():
         st["falhas_seguidas"] = 0
         gravar_historico(linhas)
         melhor, motivos = avaliar(linhas, hist_anterior)
-        if motivos and not ja_avisado(st, melhor):
+        # A Bianca só recebe alerta de preço dentro do teto. Novo mínimo ou queda acima dele: só registro.
+        dentro_do_teto = melhor["preco_pessoa"] <= CFG["teto_por_pessoa"]
+        if motivos and dentro_do_teto and not ja_avisado(st, melhor):
             confirmacao = None
             if not MODO_TESTE and serpapi_disponivel(st, 1):
                 try:
                     confirmacao = buscar_serpapi(st, melhor["ida"], melhor["volta"])
                 except Exception as e:
                     print(f"Confirmação SerpApi falhou: {e}")
-            # A Bianca só recebe preço dentro do teto. Novo mínimo ou queda acima do teto: só você.
-            publico = "alerta" if melhor["preco_pessoa"] <= CFG["teto_por_pessoa"] else "interno"
             notificar(f"Passagem SP-Lisboa: {brl(melhor['preco_pessoa'])} por pessoa",
-                      montar_alerta(melhor, motivos, linhas, confirmacao), publico)
+                      montar_alerta(melhor, motivos, linhas, confirmacao), "alerta")
             registrar_aviso(st, melhor)
+        elif motivos and not dentro_do_teto:
+            print(f"Acima do teto, sem aviso: {brl(melhor['preco_pessoa'])} ({'; '.join(motivos)})")
         else:
             print("Sem alerta nesta varredura." if not motivos else "Oferta já avisada.")
     else:
+        # Falha técnica não vai para o WhatsApp de ninguém: fica só no log da VPS.
         st["falhas_seguidas"] = st.get("falhas_seguidas", 0) + 1
-        hoje = agora().date().isoformat()
-        if st["falhas_seguidas"] >= 2 and st.get("aviso_falha") != hoje:
-            notificar("Radar SP-Lisboa sem dados",
-                      "<b>Radar SP → Lisboa sem dados</b>\n"
-                      f"{st['falhas_seguidas']} varreduras seguidas sem nenhum preço. "
-                      "A fonte pode ter mudado ou bloqueado o acesso. Veja o log do radar na VPS.",
-                      "interno")
-            st["aviso_falha"] = hoje
+        print(f"Varredura sem nenhum preço ({st['falhas_seguidas']} seguidas).")
 
     hoje = agora().date().isoformat()
-    if agora().hour >= CFG["resumo_diario_hora"] and st.get("ultimo_resumo") != hoje:
+    forcar = "--enviar-resumo" in sys.argv
+    if forcar or (agora().hour >= CFG["resumo_diario_hora"] and st.get("ultimo_resumo") != hoje):
         resumo = montar_resumo(carregar_historico())
         if resumo:
-            notificar("Radar SP-Lisboa: resumo do dia", resumo, "interno")
+            notificar("Radar SP-Lisboa: resumo do dia", resumo, "alerta")
             st["ultimo_resumo"] = hoje
 
     salvar_estado(st)

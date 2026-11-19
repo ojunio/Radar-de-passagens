@@ -1,6 +1,6 @@
 # Radar de passagens SP → Lisboa
 
-> **Situação (19/11/2026):** o radar roda na VPS da Hostinger, em `/opt/radar`, separado do CRM: WAHA próprio (sessão com o número do Júnior), varredura a cada 3 horas e ponto de envio assinado em `https://radar.moovcrm.tech/enviar` (o único elo com o CRM é um bloco no Caddyfile dele, que repassa esse endereço). O agendamento do GitHub Actions está desligado. A Bianca recebe só preço até `teto_por_pessoa`; o resto (novo mínimo, queda, resumo diário, falhas) vai só para o Júnior.
+> **Situação (19/11/2026):** o radar roda na VPS da Hostinger, em `/opt/radar`, separado do CRM: WAHA próprio (sessão com o número do Júnior), varredura a cada 3 horas e ponto de envio assinado em `https://radar.moovcrm.tech/enviar` (o único elo com o CRM é um bloco no Caddyfile dele, que repassa esse endereço). O agendamento do GitHub Actions está desligado. Todos os avisos vão só para a Bianca (decisão de 19/11/2026): alerta de preço até `teto_por_pessoa` e o resumo diário das 9h. Novo mínimo ou queda acima do teto e falhas técnicas não geram mensagem, ficam só no log (`$DC logs radar`).
 >
 > Comandos na VPS (como root):
 >
@@ -10,6 +10,7 @@
 > $DC logs --tail 50 radar                           # ver o que aconteceu
 > $DC exec radar python vps/parear.py                # reconectar o WhatsApp (QR no terminal)
 > $DC exec -e WHATSAPP_DESTINO=55DDDNUMERO radar python radar.py --exemplo-alerta   # alerta de teste para outro número
+> $DC exec radar python radar.py --enviar-resumo     # varredura agora + resumo para a Bianca
 > ```
 >
 > O POST `/enviar` exige o cabeçalho `X-Assinatura` (HMAC-SHA256 do corpo com o `RELAY_SECRET` de `/opt/radar/.env`) e o corpo `{"publico": "alerta"|"interno", "texto": "...", "ts": <unix>, "nonce": "<8 a 64 caracteres>", "chave": "<opcional, evita repetir em 24h>"}`. Limite: 6 mensagens por hora e 20 por dia. Ele só envia para os números do `.env`.
