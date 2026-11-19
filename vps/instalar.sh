@@ -27,7 +27,7 @@ fi
 DC="docker compose -p radar -f $BASE/app/vps/docker-compose.yml --env-file $BASE/.env"
 $DC up -d --build
 
-if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
+if false; then  # porta 8787 só local; nada a liberar no firewall
   ufw allow 8787/tcp >/dev/null
 fi
 
