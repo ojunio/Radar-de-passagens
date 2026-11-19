@@ -38,6 +38,16 @@ services:
       - /opt/radar/data:/data
     ports:
       - "127.0.0.1:8787:8787"   # só acessível de dentro da VPS
+    networks:
+      default: {}
+      # Rede do CRM: só para o Caddy do CRM entregar https://radar.moovcrm.tech ao ponto de envio.
+      crm:
+        aliases: [radar-relay]
+
+networks:
+  crm:
+    external: true
+    name: crm_default
 
 volumes:
   waha_sessions:

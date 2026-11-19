@@ -447,6 +447,21 @@ def main():
                        publico)
         sys.exit(0 if ok else 1)
 
+    if "--exemplo-alerta" in sys.argv:
+        # Manda um alerta de exemplo, com os preços da última varredura, para WHATSAPP_DESTINO.
+        hist = carregar_historico()
+        if not hist:
+            print("Sem histórico para montar o exemplo.")
+            sys.exit(1)
+        ultima = max(r["varredura"] for r in hist)
+        linhas = [r for r in hist if r["varredura"] == ultima]
+        melhor = min(linhas, key=lambda r: r["preco_pessoa"])
+        texto = ("<b>[TESTE do radar, pode ignorar]</b>\n"
+                 f"Preços da varredura de {linhas[0]['data_hora_brt']}\n\n"
+                 + montar_alerta(melhor, ["exemplo de alerta"], linhas, None))
+        ok = notificar("Radar SP-Lisboa: teste", texto, "alerta")
+        sys.exit(0 if ok else 1)
+
     if "--enviar" in sys.argv:
         # Usado pelas rotinas do Claude: envia o texto de um arquivo para os destinatários de alerta.
         arq = Path(sys.argv[sys.argv.index("--enviar") + 1])
@@ -468,8 +483,10 @@ def main():
                     confirmacao = buscar_serpapi(st, melhor["ida"], melhor["volta"])
                 except Exception as e:
                     print(f"Confirmação SerpApi falhou: {e}")
+            # A Bianca só recebe preço dentro do teto. Novo mínimo ou queda acima do teto: só você.
+            publico = "alerta" if melhor["preco_pessoa"] <= CFG["teto_por_pessoa"] else "interno"
             notificar(f"Passagem SP-Lisboa: {brl(melhor['preco_pessoa'])} por pessoa",
-                      montar_alerta(melhor, motivos, linhas, confirmacao))
+                      montar_alerta(melhor, motivos, linhas, confirmacao), publico)
             registrar_aviso(st, melhor)
         else:
             print("Sem alerta nesta varredura." if not motivos else "Oferta já avisada.")
@@ -480,7 +497,7 @@ def main():
             notificar("Radar SP-Lisboa sem dados",
                       "<b>Radar SP → Lisboa sem dados</b>\n"
                       f"{st['falhas_seguidas']} varreduras seguidas sem nenhum preço. "
-                      "A fonte pode ter mudado ou bloqueado o acesso. Veja o log no GitHub Actions.",
+                      "A fonte pode ter mudado ou bloqueado o acesso. Veja o log do radar na VPS.",
                       "interno")
             st["aviso_falha"] = hoje
 
