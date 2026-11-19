@@ -16,6 +16,10 @@ services:
       TZ: America/Sao_Paulo
     volumes:
       - waha_sessions:/app/.sessions
+    networks:
+      default:
+        # Nome exclusivo: na rede do CRM existe outro serviço chamado "waha".
+        aliases: [radar-waha]
 
   radar:
     build:
@@ -25,7 +29,7 @@ services:
     depends_on:
       - waha
     environment:
-      WAHA_URL: http://waha:3000
+      WAHA_URL: http://radar-waha:3000
       WAHA_API_KEY: ${WAHA_API_KEY:?}
       WAHA_SESSION: default
       WHATSAPP_DESTINO: ${WHATSAPP_DESTINO:?}
