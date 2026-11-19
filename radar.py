@@ -32,7 +32,9 @@ BRT = timezone(timedelta(hours=-3))  # Brasília, sem horário de verão
 ROOT = Path(__file__).resolve().parent
 CFG = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
 MODO_TESTE = "--teste" in sys.argv
-DATA = ROOT / ("data_teste" if MODO_TESTE else "data")  # teste nunca suja o histórico real
+DATA = Path(os.getenv("RADAR_DATA_DIR") or ROOT / "data")  # na VPS: /data (fora do código)
+if MODO_TESTE:
+    DATA = ROOT / "data_teste"  # teste nunca suja o histórico real
 HIST = DATA / "historico.csv"
 STATE = DATA / "estado.json"
 CAMPOS = ["varredura", "data_hora_brt", "origem", "ida", "volta",
