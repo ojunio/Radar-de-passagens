@@ -117,8 +117,13 @@ def gravar_historico(linhas):
 
 # ------------------------------------------------------------- fonte 1: Google
 def buscar_fast_flights(origem, ida, volta):
-    """Menor preço ida e volta POR PESSOA (consulta feita com 1 adulto)."""
-    from fast_flights import FlightQuery, Passengers, create_query, get_flights
+    """Menor preço ida e volta POR PESSOA (consulta feita com 1 adulto).
+
+    Lê as duas listas do Google Flights (voos.buscar_todos): a biblioteca sozinha lê só uma
+    e deixava passar preços mais baratos.
+    """
+    from fast_flights import FlightQuery, Passengers, create_query
+    from voos import buscar_todos
 
     q = create_query(
         flights=[FlightQuery(date=ida, from_airport=origem, to_airport=CFG["destino"]),
@@ -126,19 +131,16 @@ def buscar_fast_flights(origem, ida, volta):
         seat="economy", trip="round-trip", passengers=Passengers(adults=1),
         language="pt-BR", currency="BRL")
     try:
-        voos = get_flights(q)
+        voos = buscar_todos(q)
     except Exception:
         # O Google às vezes responde "no flights found" por instabilidade; tenta mais uma vez.
         time.sleep(random.uniform(6, 12))
-        voos = get_flights(q)
-    res = [f for f in voos if f.price and f.price > 0]
-    if not res:
+        voos = buscar_todos(q)
+    if not voos:
         return None
-    best = min(res, key=lambda f: f.price)
-    return {"preco_pessoa": float(best.price),
-            "cias": ", ".join(str(a) for a in best.airlines),
-            "paradas_ida": max(len(best.flights) - 1, 0),
-            "origem": origem}
+    best = min(voos, key=lambda v: v["preco"])
+    return {"preco_pessoa": best["preco"], "cias": best["cias"],
+            "paradas_ida": best["paradas_ida"], "origem": origem}
 
 
 # ------------------------------------------------------------ fonte 2: SerpApi
