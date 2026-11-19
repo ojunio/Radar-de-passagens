@@ -13,6 +13,8 @@
 > $DC exec radar python radar.py --enviar-resumo     # varredura agora + resumo para a Bianca
 > ```
 >
+> Outros comandos assinados do mesmo jeito (corpo só com `ts` e `nonce`): POST `/precos` devolve as 10 melhores combinações da última varredura; POST `/varrer` faz uma varredura na hora e manda o resumo para a Bianca (no máximo uma a cada 30 minutos).
+>
 > O POST `/enviar` exige o cabeçalho `X-Assinatura` (HMAC-SHA256 do corpo com o `RELAY_SECRET` de `/opt/radar/.env`) e o corpo `{"publico": "alerta"|"interno", "texto": "...", "ts": <unix>, "nonce": "<8 a 64 caracteres>", "chave": "<opcional, evita repetir em 24h>"}`. Limite: 6 mensagens por hora e 20 por dia. Ele só envia para os números do `.env`.
 
 Varre automaticamente, a cada 3 horas (inclusive de madrugada), todas as combinações:

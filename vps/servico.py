@@ -40,6 +40,8 @@ trava = threading.Lock()
 nonces = {}                               # nonce -> horário
 envios = []                               # horários dos envios aceitos
 chaves = {}                               # chave do aviso -> horário (evita repetir em 24h)
+trava_varredura = threading.Lock()        # uma varredura por vez
+ultima_varredura_pedida = [0.0]           # /varrer: no máximo uma a cada 30 minutos
 
 
 def log(msg):
@@ -85,13 +87,61 @@ def loop_varredura():
         time.sleep(max(5, (alvo - radar.agora()).total_seconds()))
         if situacao().get("status") != "WORKING":
             log("WhatsApp não está conectado; a varredura roda e só grava o histórico.")
+        with trava_varredura:
+            try:
+                radar.main()
+            except Exception:
+                traceback.print_exc()
+
+
+def varrer_agora():
+    """Pedido pelo POST /varrer: varre já e manda o resumo para a Bianca."""
+    with trava_varredura:
         try:
-            radar.main()
+            log("Varredura pedida pelo /varrer")
+            radar.main(forcar_resumo=True)
         except Exception:
             traceback.print_exc()
 
 
 # ------------------------------------------------------------ /enviar
+def validar_base(corpo, assinatura):
+    """Confere assinatura, horário e nonce. Devolve (dados, código, motivo)."""
+    esperado = hmac.new(SEGREDO, corpo, hashlib.sha256).hexdigest()
+    if not assinatura or not hmac.compare_digest(esperado, assinatura.strip().lower()):
+        return None, 401, "assinatura inválida"
+    try:
+        d = json.loads(corpo)
+    except Exception:
+        return None, 400, "JSON inválido"
+    agora = time.time()
+    if not isinstance(d.get("ts"), (int, float)) or abs(agora - d["ts"]) > JANELA_SEG:
+        return None, 401, "horário fora da janela"
+    nonce = d.get("nonce")
+    if not isinstance(nonce, str) or not 8 <= len(nonce) <= 64:
+        return None, 400, "nonce inválido"
+    with trava:
+        for n, t in list(nonces.items()):
+            if agora - t > 2 * JANELA_SEG:
+                del nonces[n]
+        if nonce in nonces:
+            return None, 401, "nonce repetido"
+        nonces[nonce] = agora
+    return d, 200, "ok"
+
+
+def precos_recentes():
+    hist = radar.carregar_historico()
+    if not hist:
+        return {"precos": []}
+    ultima = max(r["varredura"] for r in hist)
+    linhas = sorted([r for r in hist if r["varredura"] == ultima], key=lambda r: r["preco_pessoa"])
+    for r in linhas[:10]:
+        r["link"] = radar.link_google(r["origem"], r["ida"], r["volta"])
+    return {"varredura": linhas[0]["data_hora_brt"], "consultas_com_preco": len(linhas),
+            "minimo_desde_o_inicio": min(r["preco_pessoa"] for r in hist), "precos": linhas[:10]}
+
+
 def validar(corpo, assinatura):
     esperado = hmac.new(SEGREDO, corpo, hashlib.sha256).hexdigest()
     if not assinatura or not hmac.compare_digest(esperado, assinatura.strip().lower()):
@@ -145,12 +195,24 @@ class Handler(BaseHTTPRequestHandler):
         self._resp(404, {"erro": "não encontrado"})
 
     def do_POST(self):
-        if self.path != "/enviar":
+        if self.path not in ("/enviar", "/precos", "/varrer"):
             return self._resp(404, {"erro": "não encontrado"})
         n = int(self.headers.get("Content-Length") or 0)
         if n <= 0 or n > 12000:
             return self._resp(413, {"erro": "corpo inválido"})
         corpo = self.rfile.read(n)
+        if self.path in ("/precos", "/varrer"):
+            d, codigo, msg = validar_base(corpo, self.headers.get("X-Assinatura"))
+            if d is None:
+                log(f"{self.path} recusado: {msg}")
+                return self._resp(codigo, {"erro": msg})
+            if self.path == "/precos":
+                return self._resp(200, precos_recentes())
+            if time.time() - ultima_varredura_pedida[0] < 1800 or trava_varredura.locked():
+                return self._resp(429, {"erro": "varredura recente ou em andamento"})
+            ultima_varredura_pedida[0] = time.time()
+            threading.Thread(target=varrer_agora, daemon=True).start()
+            return self._resp(202, {"iniciada": True, "aviso": "o resumo chega no WhatsApp em uns 5 minutos"})
         d, codigo, msg = validar(corpo, self.headers.get("X-Assinatura"))
         if d is None:
             log(f"/enviar recusado: {msg}")

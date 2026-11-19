@@ -446,7 +446,7 @@ def notificar(assunto, texto_html, publico="alerta"):
 
 
 # ------------------------------------------------------------ principal
-def main():
+def main(forcar_resumo=False):
     if "--teste-aviso" in sys.argv:
         publico = "alerta" if "--para-bianca" in sys.argv else "interno"
         ok = notificar("Radar SP → Lisboa: teste",
@@ -505,7 +505,7 @@ def main():
         print(f"Varredura sem nenhum preço ({st['falhas_seguidas']} seguidas).")
 
     hoje = agora().date().isoformat()
-    forcar = "--enviar-resumo" in sys.argv
+    forcar = forcar_resumo or "--enviar-resumo" in sys.argv
     if forcar or (agora().hour >= CFG["resumo_diario_hora"] and st.get("ultimo_resumo") != hoje):
         resumo = montar_resumo(carregar_historico())
         if resumo:
